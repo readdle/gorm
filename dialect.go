@@ -1,6 +1,7 @@
 package gorm
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"reflect"
@@ -24,17 +25,17 @@ type Dialect interface {
 	DataTypeOf(field *StructField) string
 
 	// HasIndex check has index or not
-	HasIndex(tableName string, indexName string) bool
+	HasIndex(ctx context.Context, tableName string, indexName string) bool
 	// HasForeignKey check has foreign key or not
-	HasForeignKey(tableName string, foreignKeyName string) bool
+	HasForeignKey(ctx context.Context, tableName string, foreignKeyName string) bool
 	// RemoveIndex remove index
-	RemoveIndex(tableName string, indexName string) error
+	RemoveIndex(ctx context.Context, tableName string, indexName string) error
 	// HasTable check has table or not
-	HasTable(tableName string) bool
+	HasTable(ctx context.Context, tableName string) bool
 	// HasColumn check has column or not
-	HasColumn(tableName string, columnName string) bool
+	HasColumn(ctx context.Context, tableName string, columnName string) bool
 	// ModifyColumn modify column's type
-	ModifyColumn(tableName string, columnName string, typ string) error
+	ModifyColumn(ctx context.Context, tableName string, columnName string, typ string) error
 
 	// LimitAndOffsetSQL return generated SQL with Limit and Offset, as mssql has special case
 	LimitAndOffsetSQL(limit, offset interface{}) string
@@ -49,7 +50,7 @@ type Dialect interface {
 	BuildKeyName(kind, tableName string, fields ...string) string
 
 	// CurrentDatabase return current database name
-	CurrentDatabase() string
+	CurrentDatabase(ctx context.Context) string
 }
 
 var dialectsMap = map[string]Dialect{}
@@ -121,10 +122,10 @@ var ParseFieldStructForDialect = func(field *StructField, dialect Dialect) (fiel
 	return fieldValue, dataType, size, strings.TrimSpace(additionalType)
 }
 
-func currentDatabaseAndTable(dialect Dialect, tableName string) (string, string) {
+func currentDatabaseAndTable(ctx context.Context, dialect Dialect, tableName string) (string, string) {
 	if strings.Contains(tableName, ".") {
 		splitStrings := strings.SplitN(tableName, ".", 2)
 		return splitStrings[0], splitStrings[1]
 	}
-	return dialect.CurrentDatabase(), tableName
+	return dialect.CurrentDatabase(ctx), tableName
 }

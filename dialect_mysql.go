@@ -1,6 +1,7 @@
 package gorm
 
 import (
+	"context"
 	"crypto/sha1"
 	"fmt"
 	"reflect"
@@ -127,13 +128,13 @@ func (s *mysql) DataTypeOf(field *StructField) string {
 	return fmt.Sprintf("%v %v", sqlType, additionalType)
 }
 
-func (s mysql) RemoveIndex(tableName string, indexName string) error {
-	_, err := s.db.Exec(fmt.Sprintf("DROP INDEX %v ON %v", indexName, s.Quote(tableName)))
+func (s mysql) RemoveIndex(ctx context.Context, tableName string, indexName string) error {
+	_, err := s.db.ExecContext(ctx, fmt.Sprintf("DROP INDEX %v ON %v", indexName, s.Quote(tableName)))
 	return err
 }
 
-func (s mysql) ModifyColumn(tableName string, columnName string, typ string) error {
-	_, err := s.db.Exec(fmt.Sprintf("ALTER TABLE %v MODIFY COLUMN %v %v", tableName, columnName, typ))
+func (s mysql) ModifyColumn(ctx context.Context, tableName string, columnName string, typ string) error {
+	_, err := s.db.ExecContext(ctx, fmt.Sprintf("ALTER TABLE %v MODIFY COLUMN %v %v", tableName, columnName, typ))
 	return err
 }
 
@@ -152,15 +153,15 @@ func (s mysql) LimitAndOffsetSQL(limit, offset interface{}) (sql string) {
 	return
 }
 
-func (s mysql) HasForeignKey(tableName string, foreignKeyName string) bool {
+func (s mysql) HasForeignKey(ctx context.Context, tableName string, foreignKeyName string) bool {
 	var count int
-	currentDatabase, tableName := currentDatabaseAndTable(&s, tableName)
-	s.db.QueryRow("SELECT count(*) FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=? AND TABLE_NAME=? AND CONSTRAINT_NAME=? AND CONSTRAINT_TYPE='FOREIGN KEY'", currentDatabase, tableName, foreignKeyName).Scan(&count)
+	currentDatabase, tableName := currentDatabaseAndTable(ctx, &s, tableName)
+	s.db.QueryRowContext(ctx, "SELECT count(*) FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=? AND TABLE_NAME=? AND CONSTRAINT_NAME=? AND CONSTRAINT_TYPE='FOREIGN KEY'", currentDatabase, tableName, foreignKeyName).Scan(&count)
 	return count > 0
 }
 
-func (s mysql) CurrentDatabase() (name string) {
-	s.db.QueryRow("SELECT DATABASE()").Scan(&name)
+func (s mysql) CurrentDatabase(ctx context.Context) (name string) {
+	s.db.QueryRowContext(ctx, "SELECT DATABASE()").Scan(&name)
 	return
 }
 
