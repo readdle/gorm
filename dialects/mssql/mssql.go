@@ -2,12 +2,16 @@ package mssql
 
 import (
 	"context"
+	"database/sql/driver"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
 	"time"
 
+	// Importing mssql driver package only in dialect file, otherwide not needed
 	_ "github.com/denisenkom/go-mssqldb"
 	"github.com/jinzhu/gorm"
 )
@@ -15,7 +19,7 @@ import (
 func setIdentityInsert(scope *gorm.Scope) {
 	if scope.Dialect().GetName() == "mssql" {
 		for _, field := range scope.PrimaryFields() {
-			if _, ok := field.TagSettings["AUTO_INCREMENT"]; ok && !field.IsBlank {
+			if _, ok := field.TagSettingsGet("AUTO_INCREMENT"); ok && !field.IsBlank {
 				scope.NewDB().Exec(fmt.Sprintf("SET IDENTITY_INSERT %v ON", scope.TableName()))
 				scope.InstanceSet("mssql:identity_insert_on", true)
 			}
@@ -67,14 +71,14 @@ func (s *mssql) DataTypeOf(field *gorm.StructField) string {
 			sqlType = "bit"
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uintptr:
 			if s.fieldCanAutoIncrement(field) {
-				field.TagSettings["AUTO_INCREMENT"] = "AUTO_INCREMENT"
+				field.TagSettingsSet("AUTO_INCREMENT", "AUTO_INCREMENT")
 				sqlType = "int IDENTITY(1,1)"
 			} else {
 				sqlType = "int"
 			}
 		case reflect.Int64, reflect.Uint64:
 			if s.fieldCanAutoIncrement(field) {
-				field.TagSettings["AUTO_INCREMENT"] = "AUTO_INCREMENT"
+				field.TagSettingsSet("AUTO_INCREMENT", "AUTO_INCREMENT")
 				sqlType = "bigint IDENTITY(1,1)"
 			} else {
 				sqlType = "bigint"
@@ -113,7 +117,7 @@ func (s *mssql) DataTypeOf(field *gorm.StructField) string {
 }
 
 func (s mssql) fieldCanAutoIncrement(field *gorm.StructField) bool {
-	if value, ok := field.TagSettings["AUTO_INCREMENT"]; ok {
+	if value, ok := field.TagSettingsGet("AUTO_INCREMENT"); ok {
 		return value != "FALSE"
 	}
 	return field.IsPrimaryKey
@@ -131,7 +135,14 @@ func (s mssql) RemoveIndex(ctx context.Context, tableName string, indexName stri
 }
 
 func (s mssql) HasForeignKey(ctx context.Context, tableName string, foreignKeyName string) bool {
-	return false
+	var count int
+	currentDatabase, tableName := currentDatabaseAndTable(ctx, &s, tableName)
+	s.db.QueryRowContext(ctx, `SELECT count(*) 
+	FROM sys.foreign_keys as F inner join sys.tables as T on F.parent_object_id=T.object_id 
+		inner join information_schema.tables as I on I.TABLE_NAME = T.name 
+	WHERE F.name = ? 
+		AND T.Name = ? AND I.TABLE_CATALOG = ?;`, foreignKeyName, tableName, currentDatabase).Scan(&count)
+	return count > 0
 }
 
 func (s mssql) HasTable(ctx context.Context, tableName string) bool {
@@ -194,4 +205,28 @@ func currentDatabaseAndTable(ctx context.Context, dialect gorm.Dialect, tableNam
 		return splitStrings[0], splitStrings[1]
 	}
 	return dialect.CurrentDatabase(ctx), tableName
+}
+
+// JSON type to support easy handling of JSON data in character table fields
+// using golang json.RawMessage for deferred decoding/encoding
+type JSON struct {
+	json.RawMessage
+}
+
+// Value get value of JSON
+func (j JSON) Value() (driver.Value, error) {
+	if len(j.RawMessage) == 0 {
+		return nil, nil
+	}
+	return j.MarshalJSON()
+}
+
+// Scan scan value into JSON
+func (j *JSON) Scan(value interface{}) error {
+	str, ok := value.(string)
+	if !ok {
+		return errors.New(fmt.Sprint("Failed to unmarshal JSONB value (strcast):", value))
+	}
+	bytes := []byte(str)
+	return json.Unmarshal(bytes, j)
 }
