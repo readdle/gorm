@@ -179,7 +179,7 @@ func TestSetTable(t *testing.T) {
 	DB.Save(getPreparedUser("normal_user", "reset_table"))
 	DB.Table("deleted_users").Save(getPreparedUser("deleted_user", "reset_table"))
 	var user1, user2, user3 User
-	DB.Where("role = ?", "reset_table").First(&user1).Table("deleted_users").First(&user2).Table("").First(&user3)
+	DB.Where("role = ?", "reset_table").Take(&user1).Table("deleted_users").Take(&user2).Table("").Take(&user3)
 	if (user1.Name != "normal_user") || (user2.Name != "deleted_user") || (user3.Name != "normal_user") {
 		t.Errorf("unset specified table with blank string")
 	}
