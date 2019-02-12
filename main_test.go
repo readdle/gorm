@@ -1077,7 +1077,7 @@ func BenchmarkGorm(b *testing.B) {
 }
 
 func BenchmarkRawSql(b *testing.B) {
-	DB, _ := sql.Open("postgres", "user=gorm DB.ame=gorm sslmode=disable")
+	DB, _ := sql.Open("postgres", "user=gorm DB.name=gorm sslmode=disable")
 	DB.SetMaxIdleConns(10)
 	insertSql := "INSERT INTO emails (user_id,email,user_agent,registered_at,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id"
 	querySql := "SELECT * FROM emails WHERE email = $1 ORDER BY id LIMIT 1"
